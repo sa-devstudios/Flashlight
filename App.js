@@ -7,6 +7,7 @@ import {
   PanResponder,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,11 +15,16 @@ import {
 } from "react-native";
 
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+
 import { CameraView, useCameraPermissions } from "expo-camera";
 
 import {
   Activity,
+  AlertTriangle,
+  Check,
   Circle,
+  Hand,
+  LifeBuoy,
   Lightbulb,
   Power,
   Send,
@@ -34,9 +40,9 @@ import {
   TestIds,
 } from "react-native-google-mobile-ads";
 
-/* -------------------------------------------------------------------------- */
-/*                                MORSE TABLE                                */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================= */
+/*                              MORSE CODE                                  */
+/* ========================================================================= */
 
 const MORSE_CODE = {
   A: ".-",
@@ -49,7 +55,7 @@ const MORSE_CODE = {
   H: "....",
   I: "..",
   J: ".---",
-  K: "-.-",
+  K: "-.-.",
   L: ".-..",
   M: "--",
   N: "-.",
@@ -76,8 +82,6 @@ const MORSE_CODE = {
   7: "--...",
   8: "---..",
   9: "----.",
-
-  " ": " ",
 };
 
 /* -------------------------------------------------------------------------- */
@@ -96,73 +100,125 @@ const interstitial = InterstitialAd.createForAdRequest(interstitialAdUnitId, {
   requestNonPersonalizedAdsOnly: true,
 });
 
-/* -------------------------------------------------------------------------- */
-/*                              CONSTANTS                                     */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================= */
+/*                              CONSTANTS                                    */
+/* ========================================================================= */
 
 const MAX_MORSE_LENGTH = 20;
-const DOT_DURATION = 180;
 
-/* -------------------------------------------------------------------------- */
-/*                                  APP                                       */
-/* -------------------------------------------------------------------------- */
+const BASE_DOT_DURATION = 180;
+
+const MORSE_SPEEDS = {
+  slow: {
+    label: "SLOW",
+    multiplier: 1.8,
+  },
+
+  normal: {
+    label: "NORMAL",
+    multiplier: 1,
+  },
+
+  fast: {
+    label: "FAST",
+    multiplier: 0.55,
+  },
+};
+
+const QUICK_MESSAGES = [
+  { id: "HELLO", icon: Hand },
+  { id: "OK", icon: Check },
+  { id: "SOS", icon: AlertTriangle },
+  { id: "HELP", icon: LifeBuoy },
+];
+
+/* ========================================================================= */
+/*                                  APP                                      */
+/* ========================================================================= */
 
 export default function App() {
-  /* ------------------------------- Permission ---------------------------- */
+  /* ----------------------------------------------------------------------- */
+  /*                              PERMISSION                                 */
+  /* ----------------------------------------------------------------------- */
 
   const [permission, requestPermission] = useCameraPermissions();
 
-  /* -------------------------------- Modes --------------------------------- */
+  /* ----------------------------------------------------------------------- */
+  /*                                MODES                                    */
+  /* ----------------------------------------------------------------------- */
 
   const [activeMode, setActiveMode] = useState("torch");
 
-  /* ------------------------------ Torch state ----------------------------- */
+  /* ----------------------------------------------------------------------- */
+  /*                             FLASHLIGHT                                  */
+  /* ----------------------------------------------------------------------- */
 
   const [isLightOn, setIsLightOn] = useState(false);
   const [hardwareTorch, setHardwareTorch] = useState(false);
 
-  /* ----------------------------- Slider state ----------------------------- */
+  /* ----------------------------------------------------------------------- */
+  /*                                SLIDER                                   */
+  /* ----------------------------------------------------------------------- */
 
   const [sliderVal, setSliderVal] = useState(18);
 
-  /* ------------------------------ Morse state ----------------------------- */
-
-  const [morseText, setMorseText] = useState("");
-  const [isTransmitting, setIsTransmitting] = useState(false);
-  const [currentMorseIndex, setCurrentMorseIndex] = useState(-1);
-  const [currentMorseState, setCurrentMorseState] = useState("idle");
-
-  /* ------------------------------- Ads state ------------------------------ */
-
-  const [interstitialLoaded, setInterstitialLoaded] = useState(false);
-  const [pendingMorseMode, setPendingMorseMode] = useState(false);
-
-  /* ------------------------------- Refs ---------------------------------- */
-
-  const timeoutRefs = useRef([]);
-  const sosIntervalRef = useRef(null);
-
   const sliderWidthRef = useRef(0);
 
-  const morseAnimationRef = useRef([]);
+  /* ----------------------------------------------------------------------- */
+  /*                                MORSE                                    */
+  /* ----------------------------------------------------------------------- */
+
+  const [morseText, setMorseText] = useState("");
+
+  const [morseSpeed, setMorseSpeed] = useState("normal");
+
+  const [isTransmitting, setIsTransmitting] = useState(false);
+
+  const [currentMorseIndex, setCurrentMorseIndex] = useState(-1);
+
+  const [currentMorseState, setCurrentMorseState] = useState("idle");
+
   const morseSequenceRef = useRef([]);
 
-  /* ---------------------------- Ripple animation ------------------------- */
+  /* ----------------------------------------------------------------------- */
+  /*                                 ADS                                     */
+  /* ----------------------------------------------------------------------- */
+
+  const [interstitialLoaded, setInterstitialLoaded] = useState(false);
+
+  const pendingMorseModeRef = useRef(false);
+
+  /* ----------------------------------------------------------------------- */
+  /*                                 REFS                                    */
+  /* ----------------------------------------------------------------------- */
+
+  const timeoutRefs = useRef([]);
+
+  const sosIntervalRef = useRef(null);
+
+  /* ----------------------------------------------------------------------- */
+  /*                           RIPPLE ANIMATIONS                             */
+  /* ----------------------------------------------------------------------- */
 
   const ringAnim1 = useRef(new Animated.Value(0)).current;
+
   const ringAnim2 = useRef(new Animated.Value(0)).current;
+
   const ringAnim3 = useRef(new Animated.Value(0)).current;
 
   const rippleLoopsRef = useRef([]);
 
-  /* ------------------------------ UI animation ---------------------------- */
+  /* ----------------------------------------------------------------------- */
+  /*                            MORSE ANIMATION                              */
+  /* ----------------------------------------------------------------------- */
 
   const morsePulse = useRef(new Animated.Value(0)).current;
+
   const liveGlow = useRef(new Animated.Value(0)).current;
 
-  /* ------------------------------------------------------------------------ */
-  /*                            PERMISSION                                    */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                            CAMERA PERMISSION                             */
+  /* ========================================================================= */
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) {
@@ -170,9 +226,9 @@ export default function App() {
     }
   }, [permission, requestPermission]);
 
-  /* ------------------------------------------------------------------------ */
-  /*                              INTERSTITIAL                                */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                            INTERSTITIAL AD                               */
+  /* ========================================================================= */
 
   useEffect(() => {
     const unsubscribeLoaded = interstitial.addAdEventListener(
@@ -180,7 +236,7 @@ export default function App() {
       () => {
         setInterstitialLoaded(true);
 
-        if (pendingMorseMode) {
+        if (pendingMorseModeRef.current) {
           interstitial.show();
         }
       },
@@ -191,7 +247,8 @@ export default function App() {
       () => {
         setInterstitialLoaded(false);
 
-        setPendingMorseMode(false);
+        pendingMorseModeRef.current = false;
+
         setActiveMode("morse");
         setIsLightOn(false);
 
@@ -203,7 +260,8 @@ export default function App() {
       AdEventType.ERROR,
       () => {
         setInterstitialLoaded(false);
-        setPendingMorseMode(false);
+
+        pendingMorseModeRef.current = false;
 
         setActiveMode("morse");
         setIsLightOn(false);
@@ -217,36 +275,38 @@ export default function App() {
       unsubscribeClosed();
       unsubscribeError();
     };
-  }, [pendingMorseMode]);
+  }, []);
 
-  /* ------------------------------------------------------------------------ */
-  /*                             MORSE MODE                                   */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                              ENTER MORSE                                 */
+  /* ========================================================================= */
 
   const enterMorseMode = () => {
     if (interstitialLoaded) {
-      setPendingMorseMode(true);
+      pendingMorseModeRef.current = true;
+
       interstitial.show();
+
       return;
     }
 
-    setPendingMorseMode(true);
+    pendingMorseModeRef.current = true;
+
     interstitial.load();
   };
 
-  /* ------------------------------------------------------------------------ */
-  /*                         RIPPLE ANIMATION                                 */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                           RIPPLE ANIMATION                               */
+  /* ========================================================================= */
 
   const getRippleDuration = () => {
     const intensity = sliderVal / 35;
-
     return 2800 - intensity * 1800;
   };
 
-  const startRippleAnimation = () => {
+  const stopRippleAnimation = () => {
     rippleLoopsRef.current.forEach((loop) => {
-      if (loop && loop.stop) {
+      if (loop?.stop) {
         loop.stop();
       }
     });
@@ -260,6 +320,10 @@ export default function App() {
     ringAnim1.setValue(0);
     ringAnim2.setValue(0);
     ringAnim3.setValue(0);
+  };
+
+  const startRippleAnimation = () => {
+    stopRippleAnimation();
 
     const duration = getRippleDuration();
 
@@ -273,23 +337,27 @@ export default function App() {
     );
 
     const loop2 = Animated.loop(
-      Animated.timing(ringAnim2, {
-        toValue: 1,
-        duration,
-        delay: duration / 3,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
+      Animated.sequence([
+        Animated.delay(duration / 3),
+        Animated.timing(ringAnim2, {
+          toValue: 1,
+          duration,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+      ]),
     );
 
     const loop3 = Animated.loop(
-      Animated.timing(ringAnim3, {
-        toValue: 1,
-        duration,
-        delay: (duration / 3) * 2,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
+      Animated.sequence([
+        Animated.delay((duration / 3) * 2),
+        Animated.timing(ringAnim3, {
+          toValue: 1,
+          duration,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+      ]),
     );
 
     rippleLoopsRef.current = [loop1, loop2, loop3];
@@ -299,26 +367,8 @@ export default function App() {
     loop3.start();
   };
 
-  const stopRippleAnimation = () => {
-    rippleLoopsRef.current.forEach((loop) => {
-      if (loop && loop.stop) {
-        loop.stop();
-      }
-    });
-
-    rippleLoopsRef.current = [];
-
-    ringAnim1.stopAnimation();
-    ringAnim2.stopAnimation();
-    ringAnim3.stopAnimation();
-
-    ringAnim1.setValue(0);
-    ringAnim2.setValue(0);
-    ringAnim3.setValue(0);
-  };
-
   useEffect(() => {
-    if (isLightOn && activeMode === "torch") {
+    if (isLightOn && (activeMode === "torch" || activeMode === "sos")) {
       startRippleAnimation();
     } else {
       stopRippleAnimation();
@@ -329,9 +379,9 @@ export default function App() {
     };
   }, [isLightOn, activeMode, sliderVal]);
 
-  /* ------------------------------------------------------------------------ */
-  /*                              TORCH ENGINE                                */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                              SOS ENGINE                                  */
+  /* ========================================================================= */
 
   const getSosDelay = (value) => {
     return Math.max(80, 600 - value * 14);
@@ -346,16 +396,19 @@ export default function App() {
 
     if (activeMode === "morse") {
       setHardwareTorch(false);
+
       return;
     }
 
     if (!isLightOn) {
       setHardwareTorch(false);
+
       return;
     }
 
     if (activeMode === "torch") {
       setHardwareTorch(true);
+
       return;
     }
 
@@ -368,6 +421,7 @@ export default function App() {
 
       sosIntervalRef.current = setInterval(() => {
         state = !state;
+
         setHardwareTorch(state);
       }, delay);
     }
@@ -377,9 +431,9 @@ export default function App() {
     };
   }, [activeMode, isLightOn, sliderVal]);
 
-  /* ------------------------------------------------------------------------ */
-  /*                            SLIDER                                        */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                                SLIDER                                    */
+  /* ========================================================================= */
 
   const updateSliderFromTouch = (event) => {
     if (!sliderWidthRef.current) {
@@ -398,20 +452,26 @@ export default function App() {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+
       onMoveShouldSetPanResponder: () => true,
+
       onPanResponderGrant: updateSliderFromTouch,
+
       onPanResponderMove: updateSliderFromTouch,
     }),
   ).current;
 
-  /* ------------------------------------------------------------------------ */
-  /*                         MORSE CONVERSION                                 */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                           MORSE SEQUENCE                                 */
+  /* ========================================================================= */
 
   const createMorseSequence = (text) => {
     const sequence = [];
-
     const normalizedText = text.toUpperCase().slice(0, MAX_MORSE_LENGTH);
+
+    const speedMultiplier = MORSE_SPEEDS[morseSpeed].multiplier;
+
+    const dotDuration = BASE_DOT_DURATION * speedMultiplier;
 
     for (let charIndex = 0; charIndex < normalizedText.length; charIndex++) {
       const character = normalizedText[charIndex];
@@ -419,8 +479,10 @@ export default function App() {
       if (character === " ") {
         sequence.push({
           type: "space",
+
           characterIndex: charIndex,
-          duration: DOT_DURATION * 7,
+
+          duration: dotDuration * 7,
         });
 
         continue;
@@ -437,16 +499,21 @@ export default function App() {
 
         sequence.push({
           type: symbol === "." ? "dot" : "dash",
+
           symbol,
+
           characterIndex: charIndex,
-          duration: symbol === "." ? DOT_DURATION : DOT_DURATION * 3,
+
+          duration: symbol === "." ? dotDuration : dotDuration * 3,
         });
 
         if (symbolIndex < code.length - 1) {
           sequence.push({
             type: "gap",
+
             characterIndex: charIndex,
-            duration: DOT_DURATION,
+
+            duration: dotDuration,
           });
         }
       }
@@ -454,8 +521,10 @@ export default function App() {
       if (charIndex < normalizedText.length - 1) {
         sequence.push({
           type: "character-gap",
+
           characterIndex: charIndex,
-          duration: DOT_DURATION * 3,
+
+          duration: dotDuration * 3,
         });
       }
     }
@@ -463,21 +532,29 @@ export default function App() {
     return sequence;
   };
 
-  /* ------------------------------------------------------------------------ */
-  /*                      MORSE TRANSMISSION                                  */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                         STOP TRANSMISSION                                */
+  /* ========================================================================= */
 
   const stopMorseTransmission = () => {
     timeoutRefs.current.forEach(clearTimeout);
+
     timeoutRefs.current = [];
 
     setHardwareTorch(false);
+
     setIsTransmitting(false);
+
     setCurrentMorseIndex(-1);
+
     setCurrentMorseState("idle");
 
     morseSequenceRef.current = [];
   };
+
+  /* ========================================================================= */
+  /*                         TRANSMIT MORSE                                  */
+  /* ========================================================================= */
 
   const transmitMorse = () => {
     if (isTransmitting) {
@@ -510,22 +587,33 @@ export default function App() {
 
         if (step.type === "dot" || step.type === "dash") {
           setHardwareTorch(true);
+
           setCurrentMorseState("on");
+
+          morsePulse.stopAnimation();
+
+          morsePulse.setValue(0);
 
           Animated.sequence([
             Animated.timing(morsePulse, {
               toValue: 1,
+
               duration: 100,
+
               useNativeDriver: true,
             }),
+
             Animated.timing(morsePulse, {
               toValue: 0,
-              duration: step.duration - 100,
+
+              duration: Math.max(50, step.duration - 100),
+
               useNativeDriver: true,
             }),
           ]).start();
         } else {
           setHardwareTorch(false);
+
           setCurrentMorseState("off");
         }
       }, elapsed);
@@ -537,66 +625,82 @@ export default function App() {
 
     const finishTimeout = setTimeout(() => {
       setHardwareTorch(false);
+
       setIsTransmitting(false);
+
       setCurrentMorseIndex(-1);
+
       setCurrentMorseState("idle");
     }, elapsed);
 
     timeoutRefs.current.push(finishTimeout);
   };
 
-  /* ------------------------------------------------------------------------ */
-  /*                       MORSE LIVE TRANSLATION                              */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                         MORSE CHARACTERS                                 */
+  /* ========================================================================= */
 
   const getMorseCharacters = () => {
     const text = morseText.toUpperCase().slice(0, MAX_MORSE_LENGTH);
 
     return text.split("").map((character, index) => ({
       character,
+
       code: MORSE_CODE[character] || "?",
+
       index,
     }));
   };
 
   const morseCharacters = getMorseCharacters();
 
-  /* ------------------------------------------------------------------------ */
-  /*                           MORSE PULSE UI                                  */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                         LIVE MORSE GLOW                                  */
+  /* ========================================================================= */
 
   useEffect(() => {
     if (!isTransmitting) {
       liveGlow.stopAnimation();
+
       liveGlow.setValue(0);
+
       return;
     }
 
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(liveGlow, {
           toValue: 1,
+
           duration: 900,
+
           easing: Easing.inOut(Easing.ease),
+
           useNativeDriver: true,
         }),
+
         Animated.timing(liveGlow, {
           toValue: 0,
+
           duration: 900,
+
           easing: Easing.inOut(Easing.ease),
+
           useNativeDriver: true,
         }),
       ]),
-    ).start();
+    );
+
+    animation.start();
 
     return () => {
-      liveGlow.stopAnimation();
+      animation.stop();
     };
   }, [isTransmitting]);
 
-  /* ------------------------------------------------------------------------ */
-  /*                          RIPPLE STYLES                                   */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                            RIPPLE STYLE                                  */
+  /* ========================================================================= */
 
   const getRippleStyle = (animatedValue) => {
     const intensity = sliderVal / 35;
@@ -606,20 +710,51 @@ export default function App() {
         {
           scale: animatedValue.interpolate({
             inputRange: [0, 1],
+
             outputRange: [1, 1.45 + intensity * 0.55],
           }),
         },
       ],
+
       opacity: animatedValue.interpolate({
         inputRange: [0, 0.1, 0.7, 1],
+
         outputRange: [0, 0.25 + intensity * 0.65, 0.25 + intensity * 0.35, 0],
       }),
     };
   };
 
-  /* ------------------------------------------------------------------------ */
-  /*                          PERMISSION UI                                   */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                           QUICK MESSAGES                                 */
+  /* ========================================================================= */
+
+  const applyQuickMessage = (message) => {
+    if (isTransmitting) {
+      return;
+    }
+
+    setMorseText(message);
+  };
+
+  /* ========================================================================= */
+  /*                              CLEANUP                                     */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    return () => {
+      clearInterval(sosIntervalRef.current);
+
+      timeoutRefs.current.forEach(clearTimeout);
+
+      stopRippleAnimation();
+
+      setHardwareTorch(false);
+    };
+  }, []);
+
+  /* ========================================================================= */
+  /*                              LOADING                                     */
+  /* ========================================================================= */
 
   if (!permission) {
     return (
@@ -643,9 +778,9 @@ export default function App() {
     );
   }
 
-  /* ------------------------------------------------------------------------ */
-  /*                              MAIN UI                                     */
-  /* ------------------------------------------------------------------------ */
+  /* ========================================================================= */
+  /*                                UI                                        */
+  /* ========================================================================= */
 
   return (
     <SafeAreaProvider>
@@ -657,8 +792,7 @@ export default function App() {
             facing="back"
           />
 
-          {/* -------------------------------- HEADER ------------------------- */}
-
+          {/* HEADER */}
           <View style={styles.header}>
             <View>
               <Text style={styles.headerEyebrow}>SA.DEVSTUDIOS</Text>
@@ -679,8 +813,7 @@ export default function App() {
             </View>
           </View>
 
-          {/* ----------------------------- MODE SWITCHER -------------------- */}
-
+          {/* MODE SWITCHER */}
           <View style={styles.modeSwitcher}>
             <Pressable
               style={[
@@ -755,32 +888,17 @@ export default function App() {
             </Pressable>
           </View>
 
-          {/* ------------------------------ MAIN AREA ----------------------- */}
-
+          {/* MAIN AREA */}
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={styles.mainArea}
           >
             {activeMode === "morse" ? (
-              <View style={styles.morseScreen}>
-                {/* Morse title */}
-
-                <View style={styles.morseTitleBlock}>
-                  <View style={styles.morseIconCircle}>
-                    <Sparkles size={22} color="#111111" />
-                  </View>
-
-                  <View>
-                    <Text style={styles.morseTitle}>Morse Signal</Text>
-
-                    <Text style={styles.morseSubtitle}>
-                      Convert your message into light
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Message input */}
-
+              <ScrollView
+                style={styles.morseScreen}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* MESSAGE INPUT */}
                 <View style={styles.messageCard}>
                   <View style={styles.messageCardHeader}>
                     <Text style={styles.messageLabel}>YOUR MESSAGE</Text>
@@ -803,22 +921,84 @@ export default function App() {
                     maxLength={MAX_MORSE_LENGTH}
                     editable={!isTransmitting}
                     autoCapitalize="characters"
+                    textAlign="center"
                     returnKeyType="done"
                   />
                 </View>
 
-                {/* Live Morse translation */}
+                {/* QUICK SHORTCUTS */}
+                <View style={styles.quickMessageRow}>
+                  {QUICK_MESSAGES.map((msg) => {
+                    const Icon = msg.icon;
+                    const isActive = morseText === msg.id;
 
+                    return (
+                      <Pressable
+                        key={msg.id}
+                        style={[
+                          styles.quickMessageButton,
+                          isActive && styles.quickMessageButtonActive,
+                        ]}
+                        onPress={() => applyQuickMessage(msg.id)}
+                        disabled={isTransmitting}
+                      >
+                        <Icon
+                          size={14}
+                          color={isActive ? "#111111" : "#71717A"}
+                          strokeWidth={2.5}
+                        />
+                        <Text
+                          style={[
+                            styles.quickMessageText,
+                            isActive && styles.quickMessageTextActive,
+                          ]}
+                        >
+                          {msg.id}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.divider} />
+
+                {/* SPEED CONTROLS */}
+                <View style={styles.speedSection}>
+                  <Text style={styles.speedLabel}>MORSE SPEED</Text>
+
+                  <View style={styles.speedRow}>
+                    {Object.keys(MORSE_SPEEDS).map((speed) => (
+                      <Pressable
+                        key={speed}
+                        style={[
+                          styles.speedButton,
+                          morseSpeed === speed && styles.speedButtonActive,
+                        ]}
+                        onPress={() => setMorseSpeed(speed)}
+                        disabled={isTransmitting}
+                      >
+                        <Text
+                          style={[
+                            styles.speedButtonText,
+                            morseSpeed === speed &&
+                              styles.speedButtonTextActive,
+                          ]}
+                        >
+                          {MORSE_SPEEDS[speed].label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.divider} />
+
+                {/* LIGHT MORSE TRANSLATION */}
                 <View style={styles.translationSection}>
                   <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>LIVE TRANSLATION</Text>
+                    <Text style={styles.sectionTitle}>MORSE TRANSLATION</Text>
 
-                    <View
-                      style={[
-                        styles.signalStatus,
-                        isTransmitting && styles.signalStatusActive,
-                      ]}
-                    >
+                    <View style={styles.signalStatus}>
                       <Animated.View
                         style={[
                           styles.signalDot,
@@ -833,24 +1013,18 @@ export default function App() {
                         ]}
                       />
 
-                      <Text
-                        style={[
-                          styles.signalStatusText,
-                          isTransmitting && styles.signalStatusTextActive,
-                        ]}
-                      >
+                      <Text style={styles.signalStatusText}>
                         {isTransmitting ? "TRANSMITTING" : "READY"}
                       </Text>
                     </View>
                   </View>
 
-                  <View style={styles.translationCard}>
+                  {/* Character Badges Displayed Directly (No Container) */}
+                  <View style={styles.nakedTranslationArea}>
                     {morseCharacters.length === 0 ? (
-                      <View style={styles.emptyTranslation}>
-                        <Text style={styles.emptyTranslationText}>
-                          Your Morse code will appear here
-                        </Text>
-                      </View>
+                      <Text style={styles.emptyTranslationText}>
+                        Your Morse code will appear here
+                      </Text>
                     ) : (
                       <View style={styles.morseCharactersRow}>
                         {morseCharacters.map((item) => {
@@ -892,8 +1066,7 @@ export default function App() {
                   </View>
                 </View>
 
-                {/* Live indicator */}
-
+                {/* LIVE SIGNAL */}
                 <View style={styles.liveSignalArea}>
                   <Animated.View
                     style={[
@@ -903,6 +1076,7 @@ export default function App() {
                           inputRange: [0, 1],
                           outputRange: [0.08, 0.25],
                         }),
+
                         transform: [
                           {
                             scale: liveGlow.interpolate({
@@ -934,8 +1108,7 @@ export default function App() {
                   </View>
                 </View>
 
-                {/* Send button */}
-
+                {/* TRANSMIT BUTTON */}
                 <Pressable
                   style={[
                     styles.transmitButton,
@@ -957,7 +1130,7 @@ export default function App() {
                     </>
                   )}
                 </Pressable>
-              </View>
+              </ScrollView>
             ) : (
               <View style={styles.flashlightScreen}>
                 <View style={styles.flashlightButtonArea}>
@@ -997,8 +1170,7 @@ export default function App() {
             )}
           </KeyboardAvoidingView>
 
-          {/* ------------------------------ SLIDER ------------------------- */}
-
+          {/* SLIDER */}
           {activeMode !== "morse" && (
             <View style={styles.sliderSection}>
               <View style={styles.sliderHeader}>
@@ -1030,7 +1202,9 @@ export default function App() {
                 }}
                 {...panResponder.panHandlers}
               >
-                {Array.from({ length: 35 }).map((_, index) => (
+                {Array.from({
+                  length: 35,
+                }).map((_, index) => (
                   <View
                     key={index}
                     pointerEvents="none"
@@ -1044,8 +1218,7 @@ export default function App() {
             </View>
           )}
 
-          {/* -------------------------------- BANNER ------------------------ */}
-
+          {/* BANNER */}
           <View style={styles.bannerContainer}>
             <BannerAd
               unitId={bannerAdUnitId}
@@ -1061,9 +1234,9 @@ export default function App() {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                  STYLES                                    */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================= */
+/*                                  STYLES                                   */
+/* ========================================================================= */
 
 const styles = StyleSheet.create({
   container: {
@@ -1108,7 +1281,7 @@ const styles = StyleSheet.create({
     color: "#111111",
   },
 
-  /* ------------------------------- HEADER -------------------------------- */
+  /* ------------------------------- HEADER ------------------------------- */
 
   header: {
     paddingHorizontal: 24,
@@ -1150,7 +1323,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  /* ---------------------------- MODE SWITCHER ---------------------------- */
+  /* ---------------------------- MODE SWITCHER --------------------------- */
 
   modeSwitcher: {
     flexDirection: "row",
@@ -1186,13 +1359,13 @@ const styles = StyleSheet.create({
     color: "#111111",
   },
 
-  /* ------------------------------ MAIN AREA ------------------------------ */
+  /* ------------------------------ MAIN AREA ----------------------------- */
 
   mainArea: {
     flex: 1,
   },
 
-  /* --------------------------- FLASHLIGHT MODE --------------------------- */
+  /* --------------------------- FLASHLIGHT MODE -------------------------- */
 
   flashlightScreen: {
     flex: 1,
@@ -1260,14 +1433,14 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 18,
-    paddingBottom: 10,
+    paddingBottom: 24,
   },
 
   morseTitleBlock: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginBottom: 14,
+    marginBottom: 20,
   },
 
   morseIconCircle: {
@@ -1291,11 +1464,23 @@ const styles = StyleSheet.create({
     color: "#A1A1AA",
   },
 
-  messageCard: {
+  /* ------------------------------ DIVIDER ------------------------------- */
+
+  divider: {
+    height: 1,
     backgroundColor: "#F4F4F5",
-    borderRadius: 18,
+    marginVertical: 18,
+  },
+
+  /* ----------------------------- MESSAGE -------------------------------- */
+
+  messageCard: {
+    backgroundColor: "#FAFAFA",
+    borderWidth: 1,
+    borderColor: "#E4E4E7",
+    borderRadius: 16,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     marginBottom: 14,
   },
 
@@ -1319,25 +1504,107 @@ const styles = StyleSheet.create({
   },
 
   morseInput: {
-    marginTop: 6,
+    marginTop: 8,
     height: 40,
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "600",
     color: "#18181B",
   },
 
-  /* ------------------------- TRANSLATION ------------------------- */
+  /* -------------------------- QUICK MESSAGES ---------------------------- */
+
+  quickMessageRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  quickMessageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#F4F4F5",
+    borderWidth: 1,
+    borderColor: "#E4E4E7",
+  },
+
+  quickMessageButtonActive: {
+    backgroundColor: "#FFC700",
+    borderColor: "#FFC700",
+  },
+
+  quickMessageText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#71717A",
+    letterSpacing: 0.5,
+  },
+
+  quickMessageTextActive: {
+    color: "#111111",
+  },
+
+  /* ----------------------------- SPEED ---------------------------------- */
+
+  speedSection: {
+    paddingHorizontal: 4,
+  },
+
+  speedLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#A1A1AA",
+    letterSpacing: 1.1,
+    marginBottom: 10,
+  },
+
+  speedRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+
+  speedButton: {
+    flex: 1,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F4F4F5",
+    borderWidth: 1,
+    borderColor: "#E4E4E7",
+  },
+
+  speedButtonActive: {
+    backgroundColor: "#FFC700",
+    borderColor: "#FFC700",
+  },
+
+  speedButtonText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#71717A",
+    letterSpacing: 0.4,
+  },
+
+  speedButtonTextActive: {
+    color: "#111111",
+  },
+
+  /* -------------------------- TRANSLATION ------------------------------- */
 
   translationSection: {
-    flex: 1,
-    minHeight: 115,
+    paddingHorizontal: 4,
   },
 
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 14,
   },
 
   sectionTitle: {
@@ -1351,13 +1618,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-  },
-
-  signalStatusActive: {
-    backgroundColor: "#ECFDF5",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
 
   signalDot: {
@@ -1374,52 +1634,53 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  signalStatusTextActive: {
-    color: "#16A34A",
-  },
+  /* Naked Translation Area (No gray box) */
 
-  translationCard: {
-    flex: 1,
-    minHeight: 100,
-    maxHeight: 150,
-    borderRadius: 18,
-    backgroundColor: "#FAFAFA",
-    borderWidth: 1,
-    borderColor: "#E4E4E7",
-    padding: 12,
+  nakedTranslationArea: {
+    minHeight: 80,
     justifyContent: "center",
+    paddingVertical: 10,
+    alignItems: "center",
   },
 
   morseCharactersRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center",
     alignItems: "center",
-    gap: 7,
+    gap: 8,
   },
 
   morseCharacter: {
     minWidth: 42,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
     borderRadius: 12,
     alignItems: "center",
-    backgroundColor: "#F4F4F5",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E4E4E7",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
 
   morseCharacterActive: {
     backgroundColor: "#FFC700",
-    transform: [
-      {
-        scale: 1.08,
-      },
-    ],
+    borderColor: "#E6B200",
+    transform: [{ scale: 1.08 }],
+    shadowColor: "#FFC700",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
   },
 
   morseCharacterText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800",
-    color: "#52525B",
+    color: "#18181B",
   },
 
   morseCharacterTextActive: {
@@ -1428,32 +1689,30 @@ const styles = StyleSheet.create({
 
   morseCodeText: {
     marginTop: 2,
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#A1A1AA",
-    letterSpacing: 0.5,
+    color: "#71717A",
+    letterSpacing: 0.7,
   },
 
   morseCodeTextActive: {
-    color: "#52525B",
-  },
-
-  emptyTranslation: {
-    justifyContent: "center",
-    alignItems: "center",
+    color: "#111111",
   },
 
   emptyTranslationText: {
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: "600",
     color: "#A1A1AA",
+    textAlign: "center",
   },
 
-  /* --------------------------- LIVE SIGNAL ------------------------------- */
+  /* --------------------------- LIVE SIGNAL ------------------------------ */
 
   liveSignalArea: {
-    height: 110,
+    height: 120,
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 10,
   },
 
   liveSignalGlow: {
@@ -1498,7 +1757,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  /* ----------------------------- TRANSMIT ------------------------------- */
+  /* ---------------------------- TRANSMIT -------------------------------- */
 
   transmitButton: {
     height: 52,
@@ -1508,6 +1767,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: 9,
+    marginBottom: 20,
   },
 
   transmitButtonDisabled: {
