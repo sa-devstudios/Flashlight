@@ -43,6 +43,8 @@ import {
 import { styles } from "./src/styles/globalStyles";
 import FlashlightScreen from "./src/components/FlashlightScreen";
 import MorseScreen from "./src/components/MorseScreen";
+import RateUsModal from "./src/components/RateUsModal";
+import { useRateUsPrompt } from "./src/hooks/useRateUsPrompt";
 
 const interstitial = InterstitialAd.createForAdRequest(interstitialAdUnitId, {
   requestNonPersonalizedAdsOnly: true,
@@ -65,6 +67,13 @@ export default function App() {
 
   const [interstitialLoaded, setInterstitialLoaded] = useState(false);
   const pendingMorseModeRef = useRef(false);
+
+  const {
+    visible: rateUsVisible,
+    recordActivation,
+    respondRate,
+    respondLater,
+  } = useRateUsPrompt();
 
   const timeoutRefs = useRef([]);
   const sosIntervalRef = useRef(null);
@@ -203,6 +212,14 @@ export default function App() {
     return () => clearInterval(sosIntervalRef.current);
   }, [activeMode, isLightOn, sliderVal]);
 
+  const toggleLight = useCallback(() => {
+    setIsLightOn((prev) => {
+      const next = !prev;
+      if (next) recordActivation();
+      return next;
+    });
+  }, [recordActivation]);
+
   const updateSliderFromTouch = useCallback((event) => {
     if (!sliderWidthRef.current) return;
     const x = event.nativeEvent.locationX;
@@ -292,6 +309,7 @@ export default function App() {
 
     stopMorseTransmission();
     setIsTransmitting(true);
+    recordActivation();
     morseSequenceRef.current = sequence;
 
     let elapsed = 0;
@@ -340,6 +358,7 @@ export default function App() {
     createMorseSequence,
     stopMorseTransmission,
     morsePulse,
+    recordActivation,
   ]);
 
   const morseCharacters = useMemo(() => {
@@ -526,7 +545,7 @@ export default function App() {
             ) : (
               <FlashlightScreen
                 isLightOn={isLightOn}
-                toggleLight={() => setIsLightOn((prev) => !prev)}
+                toggleLight={toggleLight}
                 ringAnim1={ringAnim1}
                 ringAnim2={ringAnim2}
                 ringAnim3={ringAnim3}
@@ -587,6 +606,12 @@ export default function App() {
             />
           </View>
         </View>
+
+        <RateUsModal
+          visible={rateUsVisible}
+          onRate={respondRate}
+          onLater={respondLater}
+        />
       </SafeAreaView>
     </SafeAreaProvider>
   );
