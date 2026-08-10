@@ -58,7 +58,7 @@ export const QUICK_MESSAGES = [
 
 export const bannerAdUnitId = __DEV__
   ? TestIds.BANNER
-  : "ca-app-pub-5296467128204489/3318481793";
+  : "ca-app-pub-9085829824359714/7713067504";
 export const interstitialAdUnitId = __DEV__
   ? TestIds.INTERSTITIAL
-  : "ca-app-pub-5296467128204489/1492132910";
+  : "ca-app-pub-9085829824359714/6399985830";
